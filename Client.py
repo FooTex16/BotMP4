@@ -3,10 +3,7 @@ import os
 import subprocess
 import tempfile
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    Application, CommandHandler, MessageHandler, filters, CallbackContext,
-    ConversationHandler, CallbackQueryHandler
-)
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler, ConversationHandler
 import yt_dlp
 
 # Token bot Anda
@@ -84,67 +81,67 @@ START_MESSAGE = (
 ) = range(4)
 
 # Handler untuk /start
-async def start(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text(START_MESSAGE)
+def start(update, context):
+    update.message.reply_text(START_MESSAGE)
 
 # Handler untuk /tanyajawab
-async def tanyajawab(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text(QA_DATABASE["tanya jawab"])
+def tanyajawab(update, context):
+    update.message.reply_text(QA_DATABASE["tanya jawab"])
 
 # Handler untuk /perhitungan (dummy, hanya info)
-async def perhitungan(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text(
+def perhitungan(update, context):
+    update.message.reply_text(
         "Silakan ketik perhitunganmu, misal: 1.234 + 32,8 kurang 300\n"
         "Bot akan mencoba membaca dan menghitung sesuai aturan yang dijelaskan di /start."
     )
 
 # Handler untuk /convertermp4
-async def convertermp4(update: Update, context: CallbackContext) -> int:
+def convertermp4(update, context):
     keyboard = [
         [InlineKeyboardButton("Kirim File MP4", callback_data="mp4_file")],
         [InlineKeyboardButton("Link Youtube", callback_data="yt_link")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
+    update.message.reply_text(
         "Pilih sumber video yang ingin di konversi:\n- Kirim file mp4\n- Atau masukkan link youtube",
         reply_markup=reply_markup
     )
     return CONV_YT_LINK
 
-async def convertermp4_callback(update: Update, context: CallbackContext) -> int:
+def convertermp4_callback(update, context):
     query = update.callback_query
-    await query.answer()
+    query.answer()
     if query.data == "mp4_file":
-        await query.edit_message_text("Silakan kirim file mp4 yang ingin di konversi.")
+        query.edit_message_text("Silakan kirim file mp4 yang ingin di konversi.")
         context.user_data['conv_source'] = 'mp4_file'
         return CONV_FPS_CHOOSE
     elif query.data == "yt_link":
-        await query.edit_message_text("Silakan masukkan link youtube video yang ingin di konversi.")
+        query.edit_message_text("Silakan masukkan link youtube video yang ingin di konversi.")
         context.user_data['conv_source'] = 'yt_link'
         return CONV_YT_LINK
 
-async def handle_yt_link(update: Update, context: CallbackContext) -> int:
+def handle_yt_link(update, context):
     url = update.message.text.strip()
     context.user_data['yt_url'] = url
-    await update.message.reply_text(
+    update.message.reply_text(
         "Masukkan FPS yang diinginkan (15-30):\nContoh: 15"
     )
     return CONV_FPS_CHOOSE
 
-async def handle_fps_choose(update: Update, context: CallbackContext) -> int:
+def handle_fps_choose(update, context):
     try:
         fps = int(update.message.text.strip())
         if not (15 <= fps <= 30):
             raise ValueError
     except Exception:
-        await update.message.reply_text("FPS tidak valid! Masukkan angka antara 15 sampai 30.")
+        update.message.reply_text("FPS tidak valid! Masukkan angka antara 15 sampai 30.")
         return CONV_FPS_CHOOSE
 
     context.user_data['fps'] = fps
     source = context.user_data.get('conv_source')
     if source == 'yt_link':
         url = context.user_data.get('yt_url')
-        await update.message.reply_text("Sedang mendownload video dari Youtube...")
+        update.message.reply_text("Sedang mendownload video dari Youtube...")
         with tempfile.TemporaryDirectory() as tmpdir:
             ydl_opts = {
                 'outtmpl': os.path.join(tmpdir, 'video.%(ext)s'),
@@ -156,7 +153,7 @@ async def handle_fps_choose(update: Update, context: CallbackContext) -> int:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(url, download=True)
                     video_path = ydl.prepare_filename(info)
-                await update.message.reply_text("Download selesai. Proses konversi dimulai...")
+                update.message.reply_text("Download selesai. Proses konversi dimulai...")
                 output_dir = os.path.join(tmpdir, "Output_MP4")
                 os.makedirs(output_dir, exist_ok=True)
                 base_name = os.path.splitext(os.path.basename(video_path))[0]
@@ -172,23 +169,23 @@ async def handle_fps_choose(update: Update, context: CallbackContext) -> int:
                     "-c:a", "pcm_s16le", "-ar", "22050",
                     output_path
                 ]
-                await update.message.reply_text(f"Proses konversi: {' '.join(cmd)}")
+                update.message.reply_text(f"Proses konversi: {' '.join(cmd)}")
                 result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 if result.returncode != 0:
-                    await update.message.reply_text(f"Konversi gagal: {result.stderr}")
+                    update.message.reply_text(f"Konversi gagal: {result.stderr}")
                     return ConversationHandler.END
                 with open(output_path, "rb") as hasil:
-                    await update.message.reply_document(hasil, filename=output_file, caption="Konversi selesai! Berikut hasil file AVI-nya (dibalik horizontal).")
+                    update.message.reply_document(hasil, filename=output_file, caption="Konversi selesai! Berikut hasil file AVI-nya (dibalik horizontal).")
             except Exception as e:
-                await update.message.reply_text(f"Terjadi error: {e}")
+                update.message.reply_text(f"Terjadi error: {e}")
         return ConversationHandler.END
     elif source == 'mp4_file':
         context.user_data['fps'] = fps
-        await update.message.reply_text("Silakan kirim file mp4 yang ingin di konversi.")
+        update.message.reply_text("Silakan kirim file mp4 yang ingin di konversi.")
         return ConversationHandler.END  # File mp4 akan diproses di handler dokumen
 
 # Handler untuk pesan file mp4
-async def handle_document(update: Update, context: CallbackContext) -> None:
+def handle_document(update, context):
     document = update.message.document
     if document and document.mime_type == "video/mp4":
         # Tanyakan FPS ke user
@@ -196,28 +193,28 @@ async def handle_document(update: Update, context: CallbackContext) -> None:
             [InlineKeyboardButton(str(fps), callback_data=f"fps_{fps}") for fps in range(15, 31, 5)]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text(
+        update.message.reply_text(
             "File mp4 diterima. Pilih FPS yang diinginkan untuk konversi (15-30):",
             reply_markup=reply_markup
         )
         context.user_data['mp4_file_id'] = document.file_id
         context.user_data['mp4_file_name'] = document.file_name
     else:
-        await update.message.reply_text("File yang dikirim bukan mp4. Silakan kirim file mp4.")
+        update.message.reply_text("File yang dikirim bukan mp4. Silakan kirim file mp4.")
 
-async def handle_fps_callback(update: Update, context: CallbackContext) -> None:
+def handle_fps_callback(update, context):
     query = update.callback_query
-    await query.answer()
+    query.answer()
     data = query.data
     if data.startswith("fps_"):
         fps = int(data.split("_")[1])
         file_id = context.user_data.get('mp4_file_id')
         file_name = context.user_data.get('mp4_file_name', 'video.mp4')
-        await query.edit_message_text(f"Konversi dimulai dengan FPS {fps}. Mohon tunggu...")
-        file = await context.bot.get_file(file_id)
+        query.edit_message_text(f"Konversi dimulai dengan FPS {fps}. Mohon tunggu...")
+        file = context.bot.get_file(file_id)
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = os.path.join(tmpdir, file_name)
-            await file.download_to_drive(input_path)
+            file.download(input_path)
             output_dir = os.path.join(tmpdir, "Output_MP4")
             os.makedirs(output_dir, exist_ok=True)
             base_name = os.path.splitext(file_name)[0]
@@ -233,20 +230,20 @@ async def handle_fps_callback(update: Update, context: CallbackContext) -> None:
                 "-c:a", "pcm_s16le", "-ar", "22050",
                 output_path
             ]
-            await context.bot.send_message(chat_id=query.message.chat_id, text=f"Proses konversi: {' '.join(cmd)}")
+            context.bot.send_message(chat_id=query.message.chat_id, text=f"Proses konversi: {' '.join(cmd)}")
             result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             if result.returncode != 0:
-                await context.bot.send_message(chat_id=query.message.chat_id, text=f"Konversi gagal: {result.stderr}")
+                context.bot.send_message(chat_id=query.message.chat_id, text=f"Konversi gagal: {result.stderr}")
                 return
             with open(output_path, "rb") as hasil:
-                await context.bot.send_document(chat_id=query.message.chat_id, document=hasil, filename=output_file, caption="Konversi selesai! Berikut hasil file AVI-nya (dibalik horizontal).")
+                context.bot.send_document(chat_id=query.message.chat_id, document=hasil, filename=output_file, caption="Konversi selesai! Berikut hasil file AVI-nya (dibalik horizontal).")
 
 # Handler untuk /fixmp3
-async def fixmp3(update: Update, context: CallbackContext) -> int:
-    await update.message.reply_text("Silakan kirim file mp3 yang ingin di konversi bitrate-nya (256 atau 320 kbps).")
+def fixmp3(update, context):
+    update.message.reply_text("Silakan kirim file mp3 yang ingin di konversi bitrate-nya (256 atau 320 kbps).")
     return CONV_MP3_UPLOAD
 
-async def handle_mp3_upload(update: Update, context: CallbackContext) -> int:
+def handle_mp3_upload(update, context):
     document = update.message.document
     if document and document.mime_type == "audio/mpeg":
         context.user_data['mp3_file_id'] = document.file_id
@@ -256,25 +253,25 @@ async def handle_mp3_upload(update: Update, context: CallbackContext) -> int:
              InlineKeyboardButton("320 kbps", callback_data="bitrate_320")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text("Pilih bitrate yang diinginkan:", reply_markup=reply_markup)
+        update.message.reply_text("Pilih bitrate yang diinginkan:", reply_markup=reply_markup)
         return CONV_MP3_BITRATE
     else:
-        await update.message.reply_text("File yang dikirim bukan mp3. Silakan kirim file mp3.")
+        update.message.reply_text("File yang dikirim bukan mp3. Silakan kirim file mp3.")
         return CONV_MP3_UPLOAD
 
-async def handle_bitrate_callback(update: Update, context: CallbackContext) -> int:
+def handle_bitrate_callback(update, context):
     query = update.callback_query
-    await query.answer()
+    query.answer()
     data = query.data
     if data.startswith("bitrate_"):
         bitrate = int(data.split("_")[1])
         file_id = context.user_data.get('mp3_file_id')
         file_name = context.user_data.get('mp3_file_name', 'audio.mp3')
-        await query.edit_message_text(f"Konversi dimulai dengan bitrate {bitrate} kbps. Mohon tunggu...")
-        file = await context.bot.get_file(file_id)
+        query.edit_message_text(f"Konversi dimulai dengan bitrate {bitrate} kbps. Mohon tunggu...")
+        file = context.bot.get_file(file_id)
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = os.path.join(tmpdir, file_name)
-            await file.download_to_drive(input_path)
+            file.download(input_path)
             output_file = f"{os.path.splitext(file_name)[0]}_{bitrate}kbps.mp3"
             output_path = os.path.join(tmpdir, output_file)
             cmd = [
@@ -282,19 +279,19 @@ async def handle_bitrate_callback(update: Update, context: CallbackContext) -> i
                 "-b:a", f"{bitrate}k",
                 output_path
             ]
-            await context.bot.send_message(chat_id=query.message.chat_id, text=f"Proses konversi: {' '.join(cmd)}")
+            context.bot.send_message(chat_id=query.message.chat_id, text=f"Proses konversi: {' '.join(cmd)}")
             result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             if result.returncode != 0:
-                await context.bot.send_message(chat_id=query.message.chat_id, text=f"Konversi gagal: {result.stderr}")
+                context.bot.send_message(chat_id=query.message.chat_id, text=f"Konversi gagal: {result.stderr}")
                 return ConversationHandler.END
             size_mb = os.path.getsize(output_path) / (1024 * 1024)
-            await context.bot.send_message(chat_id=query.message.chat_id, text=f"Hasil file: {output_file}\nUkuran: {size_mb:.2f} MB")
+            context.bot.send_message(chat_id=query.message.chat_id, text=f"Hasil file: {output_file}\nUkuran: {size_mb:.2f} MB")
             with open(output_path, "rb") as hasil:
-                await context.bot.send_document(chat_id=query.message.chat_id, document=hasil, filename=output_file, caption=f"Konversi selesai ke {bitrate} kbps.")
+                context.bot.send_document(chat_id=query.message.chat_id, document=hasil, filename=output_file, caption=f"Konversi selesai ke {bitrate} kbps.")
         return ConversationHandler.END
 
 # Handler untuk pesan tanya jawab
-async def handle_message(update: Update, context: CallbackContext) -> None:
+def handle_message(update, context):
     text = update.message.text.lower()
     user_name = update.effective_user.full_name if update.effective_user else "User"
     logger.info(f"Pesan dari [{user_name}]: {text}")
@@ -309,17 +306,17 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
     if not response:
         response = "Maaf, saya belum bisa menjawab pertanyaan tersebut. Silakan gunakan /menu atau /help untuk melihat fitur."
 
-    await update.message.reply_text(response)
+    update.message.reply_text(response)
 
-def main() -> None:
-    application = Application.builder().token(BOT_TOKEN).build()
+def main():
+    updater = Updater(BOT_TOKEN, use_context=True)
+    dp = updater.dispatcher
 
-    # Registrasi handler
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("menu", handle_message))
-    application.add_handler(CommandHandler("help", handle_message))
-    application.add_handler(CommandHandler("tanyajawab", tanyajawab))
-    application.add_handler(CommandHandler("perhitungan", perhitungan))
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("menu", handle_message))
+    dp.add_handler(CommandHandler("help", handle_message))
+    dp.add_handler(CommandHandler("tanyajawab", tanyajawab))
+    dp.add_handler(CommandHandler("perhitungan", perhitungan))
 
     # Handler untuk convertermp4 (Conversation)
     conv_handler = ConversationHandler(
@@ -327,27 +324,27 @@ def main() -> None:
         states={
             CONV_YT_LINK: [
                 CallbackQueryHandler(convertermp4_callback),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_yt_link)
+                MessageHandler(Filters.text & ~Filters.command, handle_yt_link)
             ],
             CONV_FPS_CHOOSE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_fps_choose)
+                MessageHandler(Filters.text & ~Filters.command, handle_fps_choose)
             ],
         },
         fallbacks=[],
         allow_reentry=True
     )
-    application.add_handler(conv_handler)
+    dp.add_handler(conv_handler)
 
     # Handler untuk file mp4 (memicu pemilihan FPS)
-    application.add_handler(MessageHandler(filters.Document.VIDEO, handle_document))
-    application.add_handler(CallbackQueryHandler(handle_fps_callback, pattern=r"^fps_\d+$"))
+    dp.add_handler(MessageHandler(Filters.document.video, handle_document))
+    dp.add_handler(CallbackQueryHandler(handle_fps_callback, pattern=r"^fps_\d+$"))
 
     # Handler untuk fixmp3 (Conversation)
     fixmp3_handler = ConversationHandler(
         entry_points=[CommandHandler("fixmp3", fixmp3)],
         states={
             CONV_MP3_UPLOAD: [
-                MessageHandler(filters.Document.AUDIO, handle_mp3_upload)
+                MessageHandler(Filters.document.audio, handle_mp3_upload)
             ],
             CONV_MP3_BITRATE: [
                 CallbackQueryHandler(handle_bitrate_callback, pattern=r"^bitrate_\d+$")
@@ -356,13 +353,14 @@ def main() -> None:
         fallbacks=[],
         allow_reentry=True
     )
-    application.add_handler(fixmp3_handler)
+    dp.add_handler(fixmp3_handler)
 
     # Handler pesan tanya jawab
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
 
     logger.info("Bot siap dijalankan...")
-    application.run_polling()
+    updater.start_polling()
+    updater.idle()
 
 if __name__ == '__main__':
     main()
